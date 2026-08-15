@@ -970,23 +970,23 @@ function executeImport(){
     const radio=document.querySelector('input[name="mode_'+k+'"]:checked');
     const mode=radio?radio.value:'merge';
     if(mode==='replace'){
-      localStorage.setItem(key,JSON.stringify(v));
+      setData(key,v);
     } else {
-      const existing=localStorage.getItem(key);
-      if(!existing){localStorage.setItem(key,JSON.stringify(v));}
+      const existing=getData(key);
+      if(!existing||((Array.isArray(existing)||typeof existing==='object')&&Object.keys(existing).length===0)){setData(key,v);}
       else{
-        const localData=JSON.parse(existing);
+        const localData=Array.isArray(existing)?existing:(typeof existing==='object'?existing:[]);
         if(Array.isArray(v)&&Array.isArray(localData)){
           const ids=new Set(localData.map(i=>i.id));
           v.forEach(i=>{if(!ids.has(i.id))localData.push(i)});
-          localStorage.setItem(key,JSON.stringify(localData));
+          setData(key,localData);
         } else if(typeof v==='object'&&v!==null&&!Array.isArray(v)){
-          localStorage.setItem(key,JSON.stringify({...v,...localData}));
+          setData(key,{...v,...localData});
         }
       }
     }
   });
-  closeModal();alert('导入成功！');location.reload();
+  closeModal();alert('导入成功！数据将自动同步到云端。');location.reload();
 }
 
 function exportAll(){
