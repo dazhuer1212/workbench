@@ -962,7 +962,7 @@ function importAll(event){
   event.target.value='';
 }
 
-function executeImport(){
+async function executeImport(){
   const data=window._importData, keys=window._importKeys;
   keys.forEach(k=>{
     if(!KEYS[k])return;
@@ -986,7 +986,13 @@ function executeImport(){
       }
     }
   });
-  closeModal();alert('导入成功！数据将自动同步到云端。');location.reload();
+  // 先推送云端再刷新，防止云端旧数据覆盖
+  if(useCloudSync && supabaseClient){
+    closeModal();
+    alert('导入成功！正在同步到云端...');
+    try{await _pushCloudData(_collectAllData());}catch(e){console.warn('云同步失败:',e);}
+  }
+  closeModal();alert('导入成功！');location.reload();
 }
 
 function exportAll(){
