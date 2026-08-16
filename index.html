@@ -393,6 +393,22 @@ tr:hover{background:#FAFCFB}
         <button class="btn btn-primary" onclick="saveBalance()">保存</button>
       </div>
     </div>
+    <!-- 供应商编辑弹窗 -->
+    <div id="editSupplierModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);z-index:9999;justify-content:center;align-items:center">
+      <div style="background:#fff;border-radius:14px;padding:24px;width:90%;max-width:400px;box-shadow:0 8px 30px rgba(0,0,0,.2)">
+        <div style="font-size:16px;font-weight:700;margin-bottom:16px">编辑供应商欠款</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group"><label>名称</label><input type="text" id="editSupplierName"></div>
+          <div class="form-group"><label>欠款</label><input type="number" id="editSupplierDebt"></div>
+          <div class="form-group"><label>已还</label><input type="number" id="editSupplierPaid"></div>
+          <div class="form-group"><label>备注</label><input type="text" id="editSupplierNote"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:18px">
+          <button class="btn btn-primary" style="flex:1" onclick="saveEditSupplier()">保存</button>
+          <button class="btn" style="flex:1;background:#e5e7eb;color:#374151" onclick="document.getElementById('editSupplierModal').style.display='none'">取消</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 招聘进度 -->
@@ -1022,7 +1038,9 @@ function renderDashboard(){
   renderTodoQuadrants();
 }
 function renderTodoQuadrants(){
-  const todos=getData(KEYS.dashboard_todos);
+  const todos=getData(KEYS.daily_tasks);
+  const p2q={urgent:'qe',normal:'no',low:'no'};
+  todos.forEach(t=>{if(!t.quadrant)t.quadrant=p2q[t.priority]||'no'});
   const q={qe:[],ei:[],ie:[],no:[]};
   todos.forEach(t=>{
     if(!t.quadrant) t.quadrant='no';
@@ -1050,9 +1068,9 @@ function renderTodoQuadrants(){
   });
   container.innerHTML=html;
 }
-function toggleDashTodo(id){const t=getData(KEYS.dashboard_todos);const x=t.find(i=>i.id===id);if(x){x.done=!x.done;setData(KEYS.dashboard_todos,t);renderDashboard()}}
-function delDashTodo(id){setData(KEYS.dashboard_todos,getData(KEYS.dashboard_todos).filter(x=>x.id!==id));renderDashboard()}
-function addDashTodo(text,quadrant){const todos=getData(KEYS.dashboard_todos);todos.push({id:genId(),text:text,quadrant:quadrant,done:false});setData(KEYS.dashboard_todos,todos);renderDashboard()}
+function toggleDashTodo(id){const t=getData(KEYS.daily_tasks);const x=t.find(i=>i.id===id);if(x){x.done=!x.done;setData(KEYS.daily_tasks,t);renderDashboard();renderDailyTasks()}}
+function delDashTodo(id){setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDashboard();renderDailyTasks()}
+function addDashTodo(text,quadrant){const todos=getData(KEYS.daily_tasks);todos.push({id:genId(),text:text,quadrant:quadrant,done:false});setData(KEYS.daily_tasks,todos);renderDashboard();renderDailyTasks()}
 function addDashTodoFromUI(){const t=document.getElementById('dashTodoText').value.trim(),q=document.getElementById('dashTodoQuadrant').value;if(!t)return;addDashTodo(t,q);document.getElementById('dashTodoText').value=''}
 
 // ===== Daily Tasks =====
@@ -1082,9 +1100,9 @@ function renderDailyTasks(){
   });
   container.innerHTML=html;
 }
-function addDailyTask(){const t=document.getElementById('dailyTaskText').value.trim(),q=document.getElementById('dailyTaskPriority').value;if(!t)return;const tasks=getData(KEYS.daily_tasks);tasks.push({id:genId(),text:t,quadrant:q,done:false});setData(KEYS.daily_tasks,tasks);document.getElementById('dailyTaskText').value='';renderDailyTasks()}
-function toggleDailyTask(id){const tasks=getData(KEYS.daily_tasks);const t=tasks.find(x=>x.id===id);if(t){t.done=!t.done;setData(KEYS.daily_tasks,tasks);renderDailyTasks()}}
-function delDailyTask(id){setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDailyTasks()}
+function addDailyTask(){const t=document.getElementById('dailyTaskText').value.trim(),q=document.getElementById('dailyTaskPriority').value;if(!t)return;const tasks=getData(KEYS.daily_tasks);tasks.push({id:genId(),text:t,quadrant:q,done:false});setData(KEYS.daily_tasks,tasks);document.getElementById('dailyTaskText').value='';renderDailyTasks();renderDashboard()}
+function toggleDailyTask(id){const tasks=getData(KEYS.daily_tasks);const t=tasks.find(x=>x.id===id);if(t){t.done=!t.done;setData(KEYS.daily_tasks,tasks);renderDailyTasks();renderDashboard()}}
+function delDailyTask(id){setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDailyTasks();renderDashboard()}
 
 // ===== Performance =====
 function renderPerformance(){
@@ -1178,7 +1196,7 @@ function renderSuppliers(){
     row+='<td class="sup-remain">'+formatMoney(rem)+'</td>';
     row+='<td><span class="sup-progress"><span class="sup-progress-fill" style="width:'+rate+'%"></span></span><span style="font-weight:600;color:var(--primary)">'+rate+'%</span></td>';
     row+='<td>'+esc(s.note||'')+'</td>';
-    row+='<td><button class="btn btn-sm btn-danger" onclick="delSupplier(\''+s.id+'\')">删除</button></td>';
+    row+='<td><button class="btn btn-sm" style="margin-right:4px;background:#e8a908;color:#fff" onclick="editSupplier(\''+s.id+'\')">编辑</button><button class="btn btn-sm btn-danger" onclick="delSupplier(\''+s.id+'\')">删除</button></td>';
     row+='</tr>';
     tbody.innerHTML+=row;
   });
@@ -1192,7 +1210,9 @@ function renderSuppliers(){
   document.getElementById('reserveAmount').value=st.reserve||10000;
 }
 function addSupplier(){const n=document.getElementById('supplierName').value,d=Number(document.getElementById('supplierDebt').value),p=Number(document.getElementById('supplierPaid').value),nt=document.getElementById('supplierNote').value;if(!n)return;const s=getData(KEYS.suppliers);s.push({id:genId(),name:n,debt:d,paid:p,note:nt});setData(KEYS.suppliers,s);renderSuppliers()}
-function delSupplier(id){setData(KEYS.suppliers,getData(KEYS.suppliers).filter(x=>x.id!==id));renderSuppliers()}
+function delSupplier(id){if(!confirm('确定删除？'))return;setData(KEYS.suppliers,getData(KEYS.suppliers).filter(x=>x.id!==id));renderSuppliers()}
+function editSupplier(id){const s=getData(KEYS.suppliers).find(x=>x.id===id);if(!s)return;window._editSupplierId=id;document.getElementById('editSupplierName').value=s.name;document.getElementById('editSupplierDebt').value=s.debt;document.getElementById('editSupplierPaid').value=s.paid;document.getElementById('editSupplierNote').value=s.note||'';document.getElementById('editSupplierModal').style.display='flex'}
+function saveEditSupplier(){const id=window._editSupplierId;if(!id)return;const suppliers=getData(KEYS.suppliers);const s=suppliers.find(x=>x.id===id);if(!s)return;s.name=document.getElementById('editSupplierName').value||s.name;s.debt=Number(document.getElementById('editSupplierDebt').value)||0;s.paid=Number(document.getElementById('editSupplierPaid').value)||0;s.note=document.getElementById('editSupplierNote').value||'';setData(KEYS.suppliers,suppliers);document.getElementById('editSupplierModal').style.display='none';renderSuppliers()}
 function saveBalance(){setData(KEYS.supplier_settings,{balance:Number(document.getElementById('balanceAmount').value),reserve:Number(document.getElementById('reserveAmount').value)});alert('已保存')}
 
 // ===== Recruits =====
