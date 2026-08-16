@@ -179,6 +179,22 @@ tr:hover{background:#FAFCFB}
 .review-detail-label{font-weight:700;color:var(--text);min-width:70px;flex-shrink:0}
 .review-detail-value{color:var(--text2);font-weight:400}
 
+/* ===== Date Selector ===== */
+.date-selector{display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:14px 18px;background:var(--card-alt);border-radius:10px;border:1px solid var(--border)}
+.date-selector .date-nav-btn{width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text2);transition:all .15s;flex-shrink:0}
+.date-selector .date-nav-btn:hover{background:var(--primary-bg);border-color:var(--primary);color:var(--primary)}
+.date-selector .date-display{flex:1;text-align:center;font-size:15px;font-weight:700;color:var(--text);cursor:pointer;user-select:none;position:relative}
+.date-selector .date-display input[type="date"]{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:15px}
+.date-selector .date-today-btn{padding:4px 12px;border:1px solid var(--primary);color:var(--primary);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s;white-space:nowrap}
+.date-selector .date-today-btn:hover{background:var(--primary);color:#fff}
+.date-selector .date-weekday{font-size:12px;color:var(--text3);font-weight:500}
+.date-selector.is-today .date-today-btn{background:var(--primary);color:#fff;cursor:default}
+@media(max-width:768px){
+  .date-selector{padding:10px 12px;gap:6px}
+  .date-selector .date-display{font-size:13px}
+  .date-selector .date-nav-btn{width:28px;height:28px;font-size:14px}
+}
+
 /* ===== Misc ===== */
 .empty-state{text-align:center;padding:40px 20px;color:var(--text3);font-weight:500}
 .empty-state .empty-icon{font-size:48px;margin-bottom:12px;opacity:.5}
@@ -295,6 +311,16 @@ tr:hover{background:#FAFCFB}
       <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-value" id="dashMonthRate">0%</div><div class="stat-label">目标达成</div></div>
     </div>
     <div class="card"><div class="card-title"> 今日待办 · 四象限</div>
+      <div class="date-selector" id="dashDateSelector" style="margin-bottom:16px">
+        <button class="date-nav-btn" onclick="changeSelectedDate(-1)">‹</button>
+        <div class="date-display" id="dashDateDisplay">
+          <input type="date" id="dashDatePicker" onchange="onDatePickerChange(this.value)">
+          <span id="dashDateText"></span>
+        </div>
+        <span class="date-weekday" id="dashDateWeekday"></span>
+        <button class="date-today-btn" id="dashTodayBtn" onclick="goToToday()">今天</button>
+        <button class="date-nav-btn" onclick="changeSelectedDate(1)">›</button>
+      </div>
       <div class="add-form">
         <div class="form-group"><label>任务</label><input type="text" id="dashTodoText" placeholder="输入待办"></div>
         <div class="form-group"><label>象限</label><select id="dashTodoQuadrant"><option value="qe">重要且紧急</option><option value="ei">紧急不重要</option><option value="ie">重要不紧急</option><option value="no">不紧急不重要</option></select></div>
@@ -306,6 +332,16 @@ tr:hover{background:#FAFCFB}
 
   <!-- 每日计划 -->
   <div id="page-daily" class="page">
+    <div class="date-selector" id="dailyDateSelector">
+      <button class="date-nav-btn" onclick="changeSelectedDate(-1)">‹</button>
+      <div class="date-display" id="dailyDateDisplay">
+        <input type="date" id="dailyDatePicker" onchange="onDatePickerChange(this.value)">
+        <span id="dailyDateText"></span>
+      </div>
+      <span class="date-weekday" id="dailyDateWeekday"></span>
+      <button class="date-today-btn" id="dailyTodayBtn" onclick="goToToday()">今天</button>
+      <button class="date-nav-btn" onclick="changeSelectedDate(1)">›</button>
+    </div>
     <div class="card">
       <div class="card-title">📋 任务列表</div>
       <div class="add-form">
@@ -919,6 +955,74 @@ function getWeekStart(){const d=new Date();d.setDate(d.getDate()-d.getDay());ret
 function yesterdayStr(){const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)}
 function formatMoney(n){return '¥'+Number(n||0).toLocaleString()}
 
+// ===== Date Selector =====
+let _selectedDate = todayStr();
+const _weekNames = ['周日','周一','周二','周三','周四','周五','周六'];
+
+function changeSelectedDate(delta) {
+  const d = new Date(_selectedDate + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  _selectedDate = d.toISOString().slice(0,10);
+  _syncDateSelectors();
+  renderDashboard();
+  renderDailyTasks();
+}
+
+function onDatePickerChange(val) {
+  if (!val) return;
+  _selectedDate = val;
+  _syncDateSelectors();
+  renderDashboard();
+  renderDailyTasks();
+}
+
+function goToToday() {
+  _selectedDate = todayStr();
+  _syncDateSelectors();
+  renderDashboard();
+  renderDailyTasks();
+}
+
+function _syncDateSelectors() {
+  // Update both date selectors (dashboard + daily plan)
+  const dateObj = new Date(_selectedDate + 'T00:00:00');
+  const dateText = (dateObj.getMonth()+1) + '月' + dateObj.getDate() + '日';
+  const weekday = _weekNames[dateObj.getDay()];
+  const isToday = _selectedDate === todayStr();
+
+  // Dashboard date selector
+  const dashPicker = document.getElementById('dashDatePicker');
+  const dashText = document.getElementById('dashDateText');
+  const dashWeekday = document.getElementById('dashDateWeekday');
+  const dashTodayBtn = document.getElementById('dashTodayBtn');
+  const dashSelector = document.getElementById('dashDateSelector');
+  if (dashPicker) dashPicker.value = _selectedDate;
+  if (dashText) dashText.textContent = dateText;
+  if (dashWeekday) dashWeekday.textContent = weekday;
+  if (dashTodayBtn) dashTodayBtn.style.display = isToday ? 'none' : '';
+  if (dashSelector) { if (isToday) dashSelector.classList.add('is-today'); else dashSelector.classList.remove('is-today'); }
+
+  // Daily plan date selector
+  const dailyPicker = document.getElementById('dailyDatePicker');
+  const dailyText = document.getElementById('dailyDateText');
+  const dailyWeekday = document.getElementById('dailyDateWeekday');
+  const dailyTodayBtn = document.getElementById('dailyTodayBtn');
+  const dailySelector = document.getElementById('dailyDateSelector');
+  if (dailyPicker) dailyPicker.value = _selectedDate;
+  if (dailyText) dailyText.textContent = dateText;
+  if (dailyWeekday) dailyWeekday.textContent = weekday;
+  if (dailyTodayBtn) dailyTodayBtn.style.display = isToday ? 'none' : '';
+  if (dailySelector) { if (isToday) dailySelector.classList.add('is-today'); else dailySelector.classList.remove('is-today'); }
+}
+
+function _getTasksForDate(tasks, date) {
+  // Filter tasks by date; tasks without date field are treated as today's tasks
+  return tasks.filter(t => {
+    const taskDate = t.date || todayStr();
+    return taskDate === date;
+  });
+}
+
 // ===== Navigation =====
 const pageNames={dashboard:'首页',daily:'每日计划',performance:'业绩追踪',reviews:'差评管理',suppliers:'供应商',recruits:'招聘进度',drugs:'兽药速查',xhs:'小红书',learning:'学习成长',wishlist:'心愿清单',travel:'旅行计划',habits:'习惯打卡'};
 const renderMap={dashboard:renderDashboard,daily:renderDailyTasks,performance:renderPerformance,reviews:renderReviews,suppliers:renderSuppliers,recruits:renderRecruits,drugs:renderDrugs,xhs:renderXhs,learning:renderNotes,wishlist:renderWishlist,travel:renderTravel,habits:renderHabits};
@@ -1021,11 +1125,14 @@ function closeModal(){document.getElementById('modalOverlay').classList.remove('
 
 // ===== Dashboard =====
 function renderDashboard(){
+  _syncDateSelectors();
   const now=new Date(),hour=now.getHours();
   const g=hour<6?'夜深了，注意休息':hour<11?'早上好，新的一天加油':hour<14?'中午好，记得吃饭':hour<18?'下午好，继续加油':'晚上好，辛苦了一天';
   const wd=['日','一','二','三','四','五','六'];
   document.getElementById('dashGreeting').textContent=g+'，思唯！';
-  document.getElementById('dashDate').textContent=now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日 星期'+wd[now.getDay()];
+  const selDateObj=new Date(_selectedDate+'T00:00:00');
+  const isToday=_selectedDate===todayStr();
+  document.getElementById('dashDate').textContent=selDateObj.getFullYear()+'年'+(selDateObj.getMonth()+1)+'月'+selDateObj.getDate()+'日 星期'+wd[selDateObj.getDay()]+(isToday?' (今天)':'');
   const records=getData(KEYS.performance_records);
   const yd=yesterdayStr(),ms=todayStr().slice(0,7);
   const yesterdayRev=records.filter(r=>r.date===yd).reduce((s,r)=>s+Number(r.amount),0);
@@ -1038,7 +1145,8 @@ function renderDashboard(){
   renderTodoQuadrants();
 }
 function renderTodoQuadrants(){
-  const todos=getData(KEYS.daily_tasks);
+  const allTodos=getData(KEYS.daily_tasks);
+  const todos=_getTasksForDate(allTodos,_selectedDate);
   const p2q={urgent:'qe',normal:'no',low:'no'};
   todos.forEach(t=>{if(!t.quadrant)t.quadrant=p2q[t.priority]||'no'});
   const q={qe:[],ei:[],ie:[],no:[]};
@@ -1070,12 +1178,14 @@ function renderTodoQuadrants(){
 }
 function toggleDashTodo(id){const t=getData(KEYS.daily_tasks);const x=t.find(i=>i.id===id);if(x){x.done=!x.done;setData(KEYS.daily_tasks,t);renderDashboard();renderDailyTasks()}}
 function delDashTodo(id){setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDashboard();renderDailyTasks()}
-function addDashTodo(text,quadrant){const todos=getData(KEYS.daily_tasks);todos.push({id:genId(),text:text,quadrant:quadrant,done:false});setData(KEYS.daily_tasks,todos);renderDashboard();renderDailyTasks()}
+function addDashTodo(text,quadrant){const todos=getData(KEYS.daily_tasks);todos.push({id:genId(),text:text,quadrant:quadrant,done:false,date:_selectedDate});setData(KEYS.daily_tasks,todos);renderDashboard();renderDailyTasks()}
 function addDashTodoFromUI(){const t=document.getElementById('dashTodoText').value.trim(),q=document.getElementById('dashTodoQuadrant').value;if(!t)return;addDashTodo(t,q);document.getElementById('dashTodoText').value=''}
 
 // ===== Daily Tasks =====
 function renderDailyTasks(){
-  const tasks=getData(KEYS.daily_tasks);
+  _syncDateSelectors();
+  const allTasks=getData(KEYS.daily_tasks);
+  const tasks=_getTasksForDate(allTasks,_selectedDate);
   // backward compatibility: map old priority to quadrant
   const p2q={urgent:'qe',normal:'no',low:'no'};
   tasks.forEach(t=>{if(!t.quadrant)t.quadrant=p2q[t.priority]||'no'});
@@ -1100,7 +1210,7 @@ function renderDailyTasks(){
   });
   container.innerHTML=html;
 }
-function addDailyTask(){const t=document.getElementById('dailyTaskText').value.trim(),q=document.getElementById('dailyTaskPriority').value;if(!t)return;const tasks=getData(KEYS.daily_tasks);tasks.push({id:genId(),text:t,quadrant:q,done:false});setData(KEYS.daily_tasks,tasks);document.getElementById('dailyTaskText').value='';renderDailyTasks();renderDashboard()}
+function addDailyTask(){const t=document.getElementById('dailyTaskText').value.trim(),q=document.getElementById('dailyTaskPriority').value;if(!t)return;const tasks=getData(KEYS.daily_tasks);tasks.push({id:genId(),text:t,quadrant:q,done:false,date:_selectedDate});setData(KEYS.daily_tasks,tasks);document.getElementById('dailyTaskText').value='';renderDailyTasks();renderDashboard()}
 function toggleDailyTask(id){const tasks=getData(KEYS.daily_tasks);const t=tasks.find(x=>x.id===id);if(t){t.done=!t.done;setData(KEYS.daily_tasks,tasks);renderDailyTasks();renderDashboard()}}
 function delDailyTask(id){setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDailyTasks();renderDashboard()}
 
