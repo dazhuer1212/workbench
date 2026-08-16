@@ -194,6 +194,8 @@ tr:hover{background:#FAFCFB}
   .date-selector .date-display{font-size:13px}
   .date-selector .date-nav-btn{width:28px;height:28px;font-size:14px}
 }
+.recurrence-badge{font-size:11px;margin-left:4px;opacity:.6;vertical-align:middle}
+@media(max-width:768px){.recurrence-badge{font-size:10px;margin-left:2px}}
 
 /* ===== Misc ===== */
 .empty-state{text-align:center;padding:40px 20px;color:var(--text3);font-weight:500}
@@ -324,6 +326,7 @@ tr:hover{background:#FAFCFB}
       <div class="add-form">
         <div class="form-group"><label>任务</label><input type="text" id="dashTodoText" placeholder="输入待办"></div>
         <div class="form-group"><label>象限</label><select id="dashTodoQuadrant"><option value="qe">重要且紧急</option><option value="ei">紧急不重要</option><option value="ie">重要不紧急</option><option value="no">不紧急不重要</option></select></div>
+        <div class="form-group"><label>重复</label><select id="dashTodoRecurrence"><option value="">仅一次</option><option value="daily">每天</option><option value="weekly">每周</option><option value="monthly">每月</option></select></div>
         <button class="btn btn-primary" onclick="addDashTodoFromUI()">+ 添加</button>
       </div>
       <div class="quadrant-grid" id="dashTodoQuadrants"></div>
@@ -347,6 +350,7 @@ tr:hover{background:#FAFCFB}
       <div class="add-form">
         <div class="form-group"><label>任务</label><input type="text" id="dailyTaskText" placeholder="输入任务"></div>
         <div class="form-group"><label>象限</label><select id="dailyTaskPriority"><option value="qe">重要且紧急</option><option value="ei">紧急不重要</option><option value="ie">重要不紧急</option><option value="no" selected>不紧急不重要</option></select></div>
+        <div class="form-group"><label>重复</label><select id="dailyTaskRecurrence"><option value="">仅一次</option><option value="daily">每天</option><option value="weekly">每周</option><option value="monthly">每月</option></select></div>
         <button class="btn btn-primary" onclick="addDailyTask()">+ 添加</button>
       </div>
       <div class="quadrant-grid" id="dailyTaskQuadrants"></div>
@@ -959,10 +963,11 @@ function formatMoney(n){return '¥'+Number(n||0).toLocaleString()}
 let _selectedDate = todayStr();
 const _weekNames = ['周日','周一','周二','周三','周四','周五','周六'];
 
+function _fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function changeSelectedDate(delta) {
   const d = new Date(_selectedDate + 'T00:00:00');
   d.setDate(d.getDate() + delta);
-  _selectedDate = d.toISOString().slice(0,10);
+  _selectedDate = _fmtDate(d);
   _syncDateSelectors();
   renderDashboard();
   renderDailyTasks();
@@ -1016,10 +1021,21 @@ function _syncDateSelectors() {
 }
 
 function _getTasksForDate(tasks, date) {
-  // Filter tasks by date; tasks without date field are treated as today's tasks
   return tasks.filter(t => {
     const taskDate = t.date || todayStr();
-    return taskDate === date;
+    // 精确匹配日期的一次性任务
+    if (!t.recurrence || t.recurrence === 'none') {
+      return taskDate === date;
+    }
+    // 周期任务：date 必须 >= startDate，且跳过已完成的日期
+    if (date < taskDate) return false;
+    if (t.doneOn && t.doneOn.indexOf(date) !== -1) return false;
+    const selD = new Date(date + 'T00:00:00');
+    const startD = new Date(taskDate + 'T00:00:00');
+    if (t.recurrence === 'daily') return true;
+    if (t.recurrence === 'weekly') return selD.getDay() === startD.getDay();
+    if (t.recurrence === 'monthly') return selD.getDate() === startD.getDate();
+    return false;
   });
 }
 
@@ -1169,17 +1185,19 @@ function renderTodoQuadrants(){
     html+='<div class="quadrant '+qd.cls+'">';
     html+='<div class="quadrant-title"><span class="q-icon">'+qd.icon+'</span>'+qd.title+'</div>';
     q[qd.key].forEach(t=>{
-      html+='<div class="todo-item"><input type="checkbox" '+(t.done?'checked':'')+' onchange="toggleDashTodo(\''+t.id+'\')"><span class="todo-text '+(t.done?'done':'')+'">'+esc(t.text)+'</span><span class="todo-del" onclick="delDashTodo(\''+t.id+'\')"></span></div>';
+      const isDone=(t.recurrence&&t.recurrence!=='none')?(t.doneOn&&t.doneOn.indexOf(_selectedDate)!==-1):t.done;
+      const recBadge=(t.recurrence&&t.recurrence!=='none')?'<span class="recurrence-badge" title="'+({daily:'每天',weekly:'每周',monthly:'每月'}[t.recurrence])+'">🔁</span>':'';
+      html+='<div class="todo-item"><input type="checkbox" '+(isDone?'checked':'')+' onchange="toggleDashTodo(\''+t.id+'\')"><span class="todo-text '+(isDone?'done':'')+'">'+esc(t.text)+recBadge+'</span><span class="todo-del" onclick="delDashTodo(\''+t.id+'\')">✕</span></div>';
     });
     if(!q[qd.key].length) html+='<div class="empty-state" style="padding:16px;font-size:12px">暂无</div>';
     html+='</div>';
   });
   container.innerHTML=html;
 }
-function toggleDashTodo(id){const t=getData(KEYS.daily_tasks);const x=t.find(i=>i.id===id);if(x){x.done=!x.done;setData(KEYS.daily_tasks,t);renderDashboard();renderDailyTasks()}}
-function delDashTodo(id){setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDashboard();renderDailyTasks()}
-function addDashTodo(text,quadrant){const todos=getData(KEYS.daily_tasks);todos.push({id:genId(),text:text,quadrant:quadrant,done:false,date:_selectedDate});setData(KEYS.daily_tasks,todos);renderDashboard();renderDailyTasks()}
-function addDashTodoFromUI(){const t=document.getElementById('dashTodoText').value.trim(),q=document.getElementById('dashTodoQuadrant').value;if(!t)return;addDashTodo(t,q);document.getElementById('dashTodoText').value=''}
+function toggleDashTodo(id){const tasks=getData(KEYS.daily_tasks);const t=tasks.find(x=>x.id===id);if(!t)return;if(t.recurrence&&t.recurrence!=='none'){if(!t.doneOn)t.doneOn=[];const i=t.doneOn.indexOf(_selectedDate);if(i===-1)t.doneOn.push(_selectedDate);else t.doneOn.splice(i,1)}else{t.done=!t.done}setData(KEYS.daily_tasks,tasks);renderDashboard();renderDailyTasks()}
+function delDashTodo(id){if(!confirm('删除此周期任务将删除所有实例，确认？'))return;setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDashboard();renderDailyTasks()}
+function addDashTodo(text,quadrant,recurrence){const todos=getData(KEYS.daily_tasks);var rec=recurrence||'';todos.push({id:genId(),text:text,quadrant:quadrant,done:false,date:_selectedDate,recurrence:rec,doneOn:[]});setData(KEYS.daily_tasks,todos);renderDashboard();renderDailyTasks()}
+function addDashTodoFromUI(){const t=document.getElementById('dashTodoText').value.trim(),q=document.getElementById('dashTodoQuadrant').value;if(!t)return;var r=document.getElementById('dashTodoRecurrence')?document.getElementById('dashTodoRecurrence').value:'';addDashTodo(t,q,r);document.getElementById('dashTodoText').value=''}
 
 // ===== Daily Tasks =====
 function renderDailyTasks(){
@@ -1203,16 +1221,18 @@ function renderDailyTasks(){
     html+='<div class="quadrant '+qd.cls+'">';
     html+='<div class="quadrant-title"><span class="q-icon">'+qd.icon+'</span>'+qd.title+'</div>';
     q[qd.key].forEach(t=>{
-      html+='<div class="todo-item"><input type="checkbox" '+(t.done?'checked':'')+' onchange="toggleDailyTask(\''+t.id+'\')"><span class="todo-text '+(t.done?'done':'')+'">'+esc(t.text)+'</span><span class="todo-del" onclick="delDailyTask(\''+t.id+'\')">✕</span></div>';
+      const isDone=(t.recurrence&&t.recurrence!=='none')?(t.doneOn&&t.doneOn.indexOf(_selectedDate)!==-1):t.done;
+      const recBadge=(t.recurrence&&t.recurrence!=='none')?'<span class="recurrence-badge" title="'+({daily:'每天',weekly:'每周',monthly:'每月'}[t.recurrence])+'">🔁</span>':'';
+      html+='<div class="todo-item"><input type="checkbox" '+(isDone?'checked':'')+' onchange="toggleDailyTask(\''+t.id+'\')"><span class="todo-text '+(isDone?'done':'')+'">'+esc(t.text)+recBadge+'</span><span class="todo-del" onclick="delDailyTask(\''+t.id+'\')">✕</span></div>';
     });
     if(!q[qd.key].length) html+='<div class="empty-state" style="padding:16px;font-size:12px">暂无</div>';
     html+='</div>';
   });
   container.innerHTML=html;
 }
-function addDailyTask(){const t=document.getElementById('dailyTaskText').value.trim(),q=document.getElementById('dailyTaskPriority').value;if(!t)return;const tasks=getData(KEYS.daily_tasks);tasks.push({id:genId(),text:t,quadrant:q,done:false,date:_selectedDate});setData(KEYS.daily_tasks,tasks);document.getElementById('dailyTaskText').value='';renderDailyTasks();renderDashboard()}
-function toggleDailyTask(id){const tasks=getData(KEYS.daily_tasks);const t=tasks.find(x=>x.id===id);if(t){t.done=!t.done;setData(KEYS.daily_tasks,tasks);renderDailyTasks();renderDashboard()}}
-function delDailyTask(id){setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDailyTasks();renderDashboard()}
+function addDailyTask(){const t=document.getElementById('dailyTaskText').value.trim(),q=document.getElementById('dailyTaskPriority').value;if(!t)return;var r=document.getElementById('dailyTaskRecurrence')?document.getElementById('dailyTaskRecurrence').value:'';const tasks=getData(KEYS.daily_tasks);tasks.push({id:genId(),text:t,quadrant:q,done:false,date:_selectedDate,recurrence:r,doneOn:[]});setData(KEYS.daily_tasks,tasks);document.getElementById('dailyTaskText').value='';renderDailyTasks();renderDashboard()}
+function toggleDailyTask(id){const tasks=getData(KEYS.daily_tasks);const t=tasks.find(x=>x.id===id);if(!t)return;if(t.recurrence&&t.recurrence!=='none'){if(!t.doneOn)t.doneOn=[];const i=t.doneOn.indexOf(_selectedDate);if(i===-1)t.doneOn.push(_selectedDate);else t.doneOn.splice(i,1)}else{t.done=!t.done}setData(KEYS.daily_tasks,tasks);renderDailyTasks();renderDashboard()}
+function delDailyTask(id){if(!confirm('删除此周期任务将删除所有实例，确认？'))return;setData(KEYS.daily_tasks,getData(KEYS.daily_tasks).filter(x=>x.id!==id));renderDailyTasks();renderDashboard()}
 
 // ===== Performance =====
 function renderPerformance(){
