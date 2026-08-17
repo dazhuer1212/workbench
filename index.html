@@ -785,12 +785,14 @@ tr:hover{background:#FAFCFB}
             if (cloudTime > localTime) {
               _syncLog('检测到云端数据更新，自动合并');
               _mergeCloudToLocal(cloudData);
+              _autoRollOverTasks();
               window.dispatchEvent(new CustomEvent('cloudDataSynced'));
               _autoRefreshUI();
             }
           } else {
             // 没有本地时间戳，直接合并
             _mergeCloudToLocal(cloudData);
+            _autoRollOverTasks();
           }
         }
       } catch (e) {
@@ -891,6 +893,8 @@ tr:hover{background:#FAFCFB}
 
     if (cloudData) {
       _mergeCloudToLocal(cloudData);
+      // 自动顺延未完成任务到下一天
+      _autoRollOverTasks();
       _updateSyncStatus('已同步 ✓', false);
       // 通知各模块数据已更新
       window.dispatchEvent(new CustomEvent('cloudDataSynced'));
@@ -1021,6 +1025,28 @@ function _syncDateSelectors() {
   if (dailyWeekday) dailyWeekday.textContent = weekday;
   if (dailyTodayBtn) dailyTodayBtn.style.display = isToday ? 'none' : '';
   if (dailySelector) { if (isToday) dailySelector.classList.add('is-today'); else dailySelector.classList.remove('is-today'); }
+}
+
+// ===== 自动顺延：未完成任务自动滚到下一天 =====
+function _autoRollOverTasks() {
+  const today = todayStr();
+  const tasks = getData(KEYS.daily_tasks);
+  if (!tasks || !tasks.length) return false;
+  let changed = false;
+  tasks.forEach(t => {
+    // 只处理非周期任务
+    if (!t.recurrence || t.recurrence === 'none') {
+      if (!t.done && t.date && t.date < today) {
+        t.date = today;
+        changed = true;
+      }
+    }
+  });
+  if (changed) {
+    setData(KEYS.daily_tasks, tasks);
+    _syncLog('已自动顺延未完成任务到 ' + today);
+  }
+  return changed;
 }
 
 function _getTasksForDate(tasks, date) {
@@ -1514,6 +1540,7 @@ function loadSampleData(){
   localStorage.setItem('wb_initialized_v4','1');
 }
 loadSampleData();
+_autoRollOverTasks();
 renderDashboard();
 
   // 云同步初始化
