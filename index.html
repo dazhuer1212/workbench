@@ -104,6 +104,7 @@ input::placeholder,textarea::placeholder{color:var(--text3);font-weight:400}
 .btn-primary{background:var(--primary);color:#fff}
 .btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,177,64,0.2)}
 .btn-danger{background:var(--danger);color:#fff;font-weight:500}.btn-danger:hover{opacity:.9}
+.btn-edit{background:#e8a908;color:#fff;font-weight:500}.btn-edit:hover{opacity:.9}
 .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text2);font-weight:500}
 .btn-outline:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-bg)}
 .btn-sm{padding:5px 12px;font-size:12px}
@@ -1141,6 +1142,22 @@ function exportAll(){
 function showModal(h){document.getElementById('modalContent').innerHTML=h;document.getElementById('modalOverlay').classList.add('show')}
 function closeModal(){document.getElementById('modalOverlay').classList.remove('show')}
 
+// 通用编辑弹窗
+function openEditModal(title, fields, onSave){
+  window._editSaveFn=onSave;
+  var h='<h3>编辑'+title+'</h3>';
+  fields.forEach(function(f,i){
+    var val=f.value!==undefined?f.value:'';
+    var type=f.type||'text';
+    if(type==='textarea'){h+='<div class="form-group"><label>'+f.label+'</label><textarea id="editField_'+i+'" rows="3" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;resize:vertical">'+esc(String(val))+'</textarea></div>';}
+    else if(type==='select'){var opts=f.options.map(function(o){return '<option value="'+o.v+'"'+(o.v===val?' selected':'')+'>'+o.t+'</option>'}).join('');h+='<div class="form-group"><label>'+f.label+'</label><select id="editField_'+i+'">'+opts+'</select></div>';}
+    else{h+='<div class="form-group"><label>'+f.label+'</label><input type="'+type+'" id="editField_'+i+'" value="'+esc(String(val))+'"></div>';}
+  });
+  h+='<div style="display:flex;gap:10px;margin-top:16px"><button class="btn btn-primary" style="flex:1" onclick="if(window._editSaveFn)window._editSaveFn()">保存</button><button class="btn" style="flex:1;background:#e5e7eb;color:#374151" onclick="closeModal()">取消</button></div>';
+  showModal(h);
+}
+function getEditVal(i){return document.getElementById('editField_'+i).value}
+
 // ===== Dashboard =====
 function renderDashboard(){
   _syncDateSelectors();
@@ -1240,7 +1257,7 @@ function delDailyTask(id){if(!confirm('删除此周期任务将删除所有实�
 function renderPerformance(){
   const records=getData(KEYS.performance_records).sort((a,b)=>b.date.localeCompare(a.date));
   const tbody=document.getElementById('perfTable');tbody.innerHTML='';
-  records.forEach(r=>{tbody.innerHTML+='<tr><td>'+r.date+'</td><td>'+formatMoney(r.amount)+'</td><td><button class="btn btn-sm btn-danger" onclick="delPerformance(\''+r.id+'\')">删除</button></td></tr>'});
+  records.forEach(r=>{tbody.innerHTML+='<tr><td>'+r.date+'</td><td>'+formatMoney(r.amount)+'</td><td><button class="btn btn-sm btn-edit" onclick="editPerformance(\''+r.id+'\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="delPerformance(\''+r.id+'\')">删除</button></td></tr>'});
   const goal=(getData(KEYS.performance_settings,{})).goal||200000;
   document.getElementById('perfGoal').value=goal;
   const today=todayStr(),ms=today.slice(0,7);
@@ -1251,6 +1268,7 @@ function renderPerformance(){
 }
 function addPerformance(){const d=document.getElementById('perfDate').value,a=Number(document.getElementById('perfAmount').value);if(!d||!a)return;const r=getData(KEYS.performance_records);r.push({id:genId(),date:d,amount:a});setData(KEYS.performance_records,r);document.getElementById('perfDate').value='';document.getElementById('perfAmount').value='';renderPerformance()}
 function delPerformance(id){setData(KEYS.performance_records,getData(KEYS.performance_records).filter(x=>x.id!==id));renderPerformance()}
+function editPerformance(id){const r=getData(KEYS.performance_records).find(x=>x.id===id);if(!r)return;openEditModal('业绩记录',[{label:'日期',type:'date',value:r.date},{label:'金额',type:'number',value:r.amount}],function(){const data=getData(KEYS.performance_records);const item=data.find(x=>x.id===id);if(!item)return;item.date=getEditVal(0);item.amount=Number(getEditVal(1));setData(KEYS.performance_records,data);closeModal();renderPerformance()})}
 function savePerfGoal(){setData(KEYS.performance_settings,{goal:Number(document.getElementById('perfGoal').value)});renderPerformance();alert('目标已保存')}
 
 // ===== Reviews =====
@@ -1270,7 +1288,7 @@ function renderReviews(){
     row+='<td>'+esc(r.person||'-')+'</td>';
     row+='<td><span class="tag '+(st[r.status]||'tag-gray')+'">'+r.status+'</span></td>';
     row+='<td><button class="btn btn-sm btn-outline" onclick="toggleReviewDetail(\''+r.id+'\')">详情</button></td>';
-    row+='<td><button class="btn btn-sm btn-danger" onclick="delReview(\''+r.id+'\')">删除</button></td>';
+    row+='<td><button class="btn btn-sm btn-edit" onclick="editReview(\''+r.id+'\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="delReview(\''+r.id+'\')">删除</button></td>';
     row+='</tr>';
     let detail='<tr><td colspan="10" style="padding:0;border-bottom:1px solid var(--border-light)"><div class="review-detail" id="review-detail-'+r.id+'">';
     detail+='<div class="review-detail-row"><span class="review-detail-label">宠物信息</span><span class="review-detail-value">'+esc(r.pet||'-')+'</span></div>';
@@ -1312,6 +1330,7 @@ function addReview(){
   document.getElementById('reviewReflect').value='';
 }
 function delReview(id){setData(KEYS.reviews,getData(KEYS.reviews).filter(x=>x.id!==id));renderReviews()}
+function editReview(id){const r=getData(KEYS.reviews).find(x=>x.id===id);if(!r)return;openEditModal('差评记录',[{label:'状态',type:'select',value:r.status,options:[{v:'待处理',t:'待处理'},{v:'处理中',t:'处理中'},{v:'已解决',t:'已解决'}]},{label:'处理人',value:r.person||''},{label:'处理措施',type:'textarea',value:r.action||''},{label:'结果反馈',type:'textarea',value:r.result||''},{label:'反思改进',type:'textarea',value:r.reflect||''}],function(){const data=getData(KEYS.reviews);const item=data.find(x=>x.id===id);if(!item)return;item.status=getEditVal(0);item.person=getEditVal(1);item.action=getEditVal(2);item.result=getEditVal(3);item.reflect=getEditVal(4);setData(KEYS.reviews,data);closeModal();renderReviews()})}
 
 // ===== Suppliers =====
 function renderSuppliers(){
@@ -1362,13 +1381,14 @@ function renderRecruits(){
     row+='<td class="'+evalClass+'">'+esc(r.eval)+'</td>';
     row+='<td><span class="tag '+sat.cls+'">'+sat.text+'</span></td>';
     row+='<td>'+esc(r.note||'')+'</td>';
-    row+='<td><button class="btn btn-sm btn-danger" onclick="delRecruit(\''+r.id+'\')">删除</button></td>';
+    row+='<td><button class="btn btn-sm btn-edit" onclick="editRecruit(\''+r.id+'\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="delRecruit(\''+r.id+'\')">删除</button></td>';
     row+='</tr>';
     tbody.innerHTML+=row;
   });
 }
 function addRecruit(){const p=document.getElementById('recruitPosition').value,n=document.getElementById('recruitName').value,d=document.getElementById('recruitDate').value,e=document.getElementById('recruitEval').value,sat=document.getElementById('recruitSatisfaction').value,nt=document.getElementById('recruitNote').value;if(!p||!n)return;const r=getData(KEYS.recruits);r.push({id:genId(),position:p,name:n,date:d,eval:e,satisfaction:sat,note:nt});setData(KEYS.recruits,r);renderRecruits()}
 function delRecruit(id){setData(KEYS.recruits,getData(KEYS.recruits).filter(x=>x.id!==id));renderRecruits()}
+function editRecruit(id){const r=getData(KEYS.recruits).find(x=>x.id===id);if(!r)return;openEditModal('面试记录',[{label:'岗位',value:r.position||''},{label:'姓名',value:r.name||''},{label:'日期',type:'date',value:r.date||''},{label:'评估',type:'textarea',value:r.eval||''},{label:'满意度',type:'select',value:r.satisfaction||'neutral',options:[{v:'satisfied',t:'满意'},{v:'neutral',t:'一般'},{v:'unsatisfied',t:'不满意'}]},{label:'备注',value:r.note||''}],function(){const data=getData(KEYS.recruits);const item=data.find(x=>x.id===id);if(!item)return;item.position=getEditVal(0);item.name=getEditVal(1);item.date=getEditVal(2);item.eval=getEditVal(3);item.satisfaction=getEditVal(4);item.note=getEditVal(5);setData(KEYS.recruits,data);closeModal();renderRecruits()})}
 
 // ===== Drugs =====
 function renderDrugs(){
@@ -1392,14 +1412,16 @@ function renderXhs(){
   const topics=getData(KEYS.xhs_topics).sort((a,b)=>(b.publishDate||'').localeCompare(a.publishDate||''));
   const tbody=document.getElementById('xhsTopicTable');tbody.innerHTML='';
   const st={'待创作':'tag-gray','创作中':'tag-orange','已发布':'tag-green'};
-  topics.forEach(t=>{tbody.innerHTML+='<tr><td style="font-weight:600">'+esc(t.title)+'</td><td style="font-weight:400">'+esc(t.summary||'')+'</td><td><span class="tag '+(st[t.status]||'tag-gray')+'">'+t.status+'</span></td><td>'+(t.publishDate||'')+'</td><td>'+(t.publishTime||'')+'</td><td><button class="btn btn-sm btn-danger" onclick="delXhsTopic(\''+t.id+'\')">删除</button></td></tr>'});
+  topics.forEach(t=>{tbody.innerHTML+='<tr><td style="font-weight:600">'+esc(t.title)+'</td><td style="font-weight:400">'+esc(t.summary||'')+'</td><td><span class="tag '+(st[t.status]||'tag-gray')+'">'+t.status+'</span></td><td>'+(t.publishDate||'')+'</td><td>'+(t.publishTime||'')+'</td><td><button class="btn btn-sm btn-edit" onclick="editXhsTopic(\''+t.id+'\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="delXhsTopic(\''+t.id+'\')">删除</button></td></tr>'});
   const inspirations=getData(KEYS.xhs_inspirations);const list=document.getElementById('xhsInspirationList');list.innerHTML='';
-  inspirations.forEach(i=>{list.innerHTML+='<div class="todo-item"><span class="todo-text">💡 '+esc(i.text)+'</span><span style="font-size:12px;color:var(--text3);font-weight:400">'+i.time+'</span><span class="todo-del" onclick="delXhsInspiration(\''+i.id+'\')">✕</span></div>'});
+  inspirations.forEach(i=>{list.innerHTML+='<div class="todo-item"><span class="todo-text">💡 '+esc(i.text)+'</span><span style="font-size:12px;color:var(--text3);font-weight:400">'+i.time+'</span><button class="btn btn-sm btn-edit" style="margin-right:6px;padding:2px 8px;font-size:11px" onclick="editXhsInspiration(\''+i.id+'\')">编辑</button><span class="todo-del" onclick="delXhsInspiration(\''+i.id+'\')">✕</span></div>'});
 }
 function addXhsTopic(){const t=document.getElementById('xhsTitle').value,s=document.getElementById('xhsSummary').value,st=document.getElementById('xhsStatus').value,pd=document.getElementById('xhsPubDate').value,pt=document.getElementById('xhsPubTime').value;if(!t)return;const topics=getData(KEYS.xhs_topics);topics.push({id:genId(),title:t,summary:s,status:st,publishDate:pd||(st==='已发布'?todayStr():''),publishTime:pt||''});setData(KEYS.xhs_topics,topics);document.getElementById('xhsTitle').value='';document.getElementById('xhsSummary').value='';document.getElementById('xhsPubDate').value='';renderXhs()}
 function delXhsTopic(id){setData(KEYS.xhs_topics,getData(KEYS.xhs_topics).filter(x=>x.id!==id));renderXhs()}
+function editXhsTopic(id){const t=getData(KEYS.xhs_topics).find(x=>x.id===id);if(!t)return;openEditModal('选题',[{label:'标题',value:t.title||''},{label:'简介',value:t.summary||''},{label:'状态',type:'select',value:t.status||'待创作',options:[{v:'待创作',t:'待创作'},{v:'创作中',t:'创作中'},{v:'已发布',t:'已发布'}]},{label:'发布日期',type:'date',value:t.publishDate||''},{label:'发布时间',type:'time',value:t.publishTime||''}],function(){const data=getData(KEYS.xhs_topics);const item=data.find(x=>x.id===id);if(!item)return;item.title=getEditVal(0);item.summary=getEditVal(1);item.status=getEditVal(2);item.publishDate=getEditVal(3);item.publishTime=getEditVal(4);setData(KEYS.xhs_topics,data);closeModal();renderXhs()})}
 function addXhsInspiration(){const t=document.getElementById('xhsInspiration').value;if(!t)return;const i=getData(KEYS.xhs_inspirations);i.push({id:genId(),text:t,time:new Date().toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})});setData(KEYS.xhs_inspirations,i);document.getElementById('xhsInspiration').value='';renderXhs()}
 function delXhsInspiration(id){setData(KEYS.xhs_inspirations,getData(KEYS.xhs_inspirations).filter(x=>x.id!==id));renderXhs()}
+function editXhsInspiration(id){const i=getData(KEYS.xhs_inspirations).find(x=>x.id===id);if(!i)return;openEditModal('灵感',[{label:'内容',value:i.text||''}],function(){const data=getData(KEYS.xhs_inspirations);const item=data.find(x=>x.id===id);if(!item)return;item.text=getEditVal(0);setData(KEYS.xhs_inspirations,data);closeModal();renderXhs()})}
 
 // ===== Notes =====
 function renderNotes(){
@@ -1409,7 +1431,7 @@ function renderNotes(){
     let html='<div class="card" style="margin-bottom:12px;padding:16px;background:var(--card-alt)">';
     html+='<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">';
     html+='<div><strong style="font-size:15px;font-weight:700">'+esc(n.title)+'</strong><span class="tag tag-green" style="margin-left:8px">'+n.type+'</span><span style="color:var(--text3);font-size:12px;margin-left:8px;font-weight:400">'+n.date+'</span></div>';
-    html+='<button class="btn btn-sm btn-danger" onclick="delNote(\''+n.id+'\')">删除</button></div>';
+    html+='<button class="btn btn-sm btn-edit" style="margin-right:4px" onclick="editNote(\''+n.id+'\')">编辑</button><button class="btn btn-sm btn-danger" onclick="delNote(\''+n.id+'\')">删除</button></div>';
     if(n.insights){
       html+='<div class="note-section"><div class="note-section-title">💡 核心观点</div><div class="note-section-text">'+esc(n.insights)+'</div></div>';
     }
@@ -1423,27 +1445,30 @@ function renderNotes(){
 }
 function addNote(){const d=document.getElementById('noteDate').value||todayStr(),t=document.getElementById('noteTitle').value,tp=document.getElementById('noteType').value,i=document.getElementById('noteInsights').value,a=document.getElementById('noteAction').value;if(!t)return;const n=getData(KEYS.notes);n.push({id:genId(),date:d,title:t,type:tp,insights:i,action:a});setData(KEYS.notes,n);document.getElementById('noteTitle').value='';document.getElementById('noteInsights').value='';document.getElementById('noteAction').value='';renderNotes()}
 function delNote(id){setData(KEYS.notes,getData(KEYS.notes).filter(x=>x.id!==id));renderNotes()}
+function editNote(id){const n=getData(KEYS.notes).find(x=>x.id===id);if(!n)return;openEditModal('学习笔记',[{label:'标题',value:n.title||''},{label:'日期',type:'date',value:n.date||''},{label:'类型',type:'select',value:n.type||'听书',options:[{v:'听书',t:'听书'},{v:'播客',t:'播客'},{v:'课程',t:'课程'},{v:'读书',t:'读书'}]},{label:'核心观点',type:'textarea',value:n.insights||''},{label:'个人行动',type:'textarea',value:n.action||''}],function(){const data=getData(KEYS.notes);const item=data.find(x=>x.id===id);if(!item)return;item.title=getEditVal(0);item.date=getEditVal(1);item.type=getEditVal(2);item.insights=getEditVal(3);item.action=getEditVal(4);setData(KEYS.notes,data);closeModal();renderNotes()})}
 
 // ===== Wishlist =====
 function renderWishlist(){
   const items=getData(KEYS.wishlist);const list=document.getElementById('wishList');list.innerHTML='';
   const pn={high:'高',medium:'中',low:'低'},pt={high:'tag-red',medium:'tag-orange',low:'tag-gray'};
-  items.forEach(w=>{list.innerHTML+='<div class="todo-item"><input type="checkbox" '+(w.done?'checked':'')+' onchange="toggleWish(\''+w.id+'\')"><span class="todo-text '+(w.done?'done':'')+'">'+esc(w.item)+'</span><span style="color:var(--text2);font-weight:500">'+(w.price?formatMoney(w.price):'')+'</span><span class="tag '+pt[w.priority]+'">'+pn[w.priority]+'</span><span class="todo-del" onclick="delWish(\''+w.id+'\')">✕</span></div>'});
+  items.forEach(w=>{list.innerHTML+='<div class="todo-item"><input type="checkbox" '+(w.done?'checked':'')+' onchange="toggleWish(\''+w.id+'\')"><span class="todo-text '+(w.done?'done':'')+'">'+esc(w.item)+'</span><span style="color:var(--text2);font-weight:500">'+(w.price?formatMoney(w.price):'')+'</span><span class="tag '+pt[w.priority]+'">'+pn[w.priority]+'</span><button class="btn btn-sm btn-edit" style="margin-right:6px;padding:2px 8px;font-size:11px" onclick="editWish(\''+w.id+'\')">编辑</button><span class="todo-del" onclick="delWish(\''+w.id+'\')">✕</span></div>'});
   if(!items.length)list.innerHTML='<div class="empty-state">暂无心愿</div>';
 }
 function addWish(){const i=document.getElementById('wishItem').value,p=Number(document.getElementById('wishPrice').value),pr=document.getElementById('wishPriority').value;if(!i)return;const items=getData(KEYS.wishlist);items.push({id:genId(),item:i,price:p,priority:pr,done:false});setData(KEYS.wishlist,items);document.getElementById('wishItem').value='';document.getElementById('wishPrice').value='';renderWishlist()}
 function toggleWish(id){const items=getData(KEYS.wishlist);const w=items.find(x=>x.id===id);if(w){w.done=!w.done;setData(KEYS.wishlist,items);renderWishlist()}}
 function delWish(id){setData(KEYS.wishlist,getData(KEYS.wishlist).filter(x=>x.id!==id));renderWishlist()}
+function editWish(id){const w=getData(KEYS.wishlist).find(x=>x.id===id);if(!w)return;openEditModal('心愿',[{label:'名称',value:w.item||''},{label:'价格',type:'number',value:w.price||''},{label:'优先级',type:'select',value:w.priority||'medium',options:[{v:'high',t:'高'},{v:'medium',t:'中'},{v:'low',t:'低'}]}],function(){const data=getData(KEYS.wishlist);const item=data.find(x=>x.id===id);if(!item)return;item.item=getEditVal(0);item.price=Number(getEditVal(1))||0;item.priority=getEditVal(2);setData(KEYS.wishlist,data);closeModal();renderWishlist()})}
 
 // ===== Travel =====
 function renderTravel(){
   const travels=getData(KEYS.travel).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const tbody=document.getElementById('travelTable');tbody.innerHTML='';
   const st={'计划中':'tag-blue','已预订':'tag-orange','已完成':'tag-green'};
-  travels.forEach(t=>{tbody.innerHTML+='<tr><td style="font-weight:600">'+esc(t.dest)+'</td><td>'+(t.date||'')+'</td><td>'+(t.budget?formatMoney(t.budget):'')+'</td><td><span class="tag '+(st[t.status]||'tag-blue')+'">'+t.status+'</span></td><td><button class="btn btn-sm btn-danger" onclick="delTravel(\''+t.id+'\')">删除</button></td></tr>'});
+  travels.forEach(t=>{tbody.innerHTML+='<tr><td style="font-weight:600">'+esc(t.dest)+'</td><td>'+(t.date||'')+'</td><td>'+(t.budget?formatMoney(t.budget):'')+'</td><td><span class="tag '+(st[t.status]||'tag-blue')+'">'+t.status+'</span></td><td><button class="btn btn-sm btn-edit" onclick="editTravel(\''+t.id+'\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="delTravel(\''+t.id+'\')">删除</button></td></tr>'});
 }
 function addTravel(){const d=document.getElementById('travelDest').value,dt=document.getElementById('travelDate').value,b=Number(document.getElementById('travelBudget').value),s=document.getElementById('travelStatus').value;if(!d)return;const t=getData(KEYS.travel);t.push({id:genId(),dest:d,date:dt,budget:b,status:s});setData(KEYS.travel,t);renderTravel()}
 function delTravel(id){setData(KEYS.travel,getData(KEYS.travel).filter(x=>x.id!==id));renderTravel()}
+function editTravel(id){const t=getData(KEYS.travel).find(x=>x.id===id);if(!t)return;openEditModal('旅行计划',[{label:'目的地',value:t.dest||''},{label:'日期',type:'date',value:t.date||''},{label:'预算',type:'number',value:t.budget||''},{label:'状态',type:'select',value:t.status||'计划中',options:[{v:'计划中',t:'计划中'},{v:'已预订',t:'已预订'},{v:'已完成',t:'已完成'}]}],function(){const data=getData(KEYS.travel);const item=data.find(x=>x.id===id);if(!item)return;item.dest=getEditVal(0);item.date=getEditVal(1);item.budget=Number(getEditVal(2))||0;item.status=getEditVal(3);setData(KEYS.travel,data);closeModal();renderTravel()})}
 
 // ===== Habits =====
 function renderHabits(){
@@ -1452,7 +1477,7 @@ function renderHabits(){
   habits.forEach(h=>{
     const checked=checks.some(c=>c.habitId===h.id&&c.date===today);
     const streak=calcStreak(h.id,checks);
-    list.innerHTML+='<div class="todo-item"><input type="checkbox" '+(checked?'checked':'')+' onchange="toggleHabit(\''+h.id+'\')"><span class="todo-text">'+esc(h.name)+'</span><span class="tag tag-green"> '+streak+'天</span><span class="todo-del" onclick="delHabit(\''+h.id+'\')">✕</span></div>';
+    list.innerHTML+='<div class="todo-item"><input type="checkbox" '+(checked?'checked':'')+' onchange="toggleHabit(\''+h.id+'\')"><span class="todo-text">'+esc(h.name)+'</span><span class="tag tag-green"> '+streak+'天</span><button class="btn btn-sm btn-edit" style="margin-right:6px;padding:2px 8px;font-size:11px" onclick="editHabit(\''+h.id+'\')">编辑</button><span class="todo-del" onclick="delHabit(\''+h.id+'\')">✕</span></div>';
   });
   if(!habits.length)list.innerHTML='<div class="empty-state">暂无习惯</div>';
 }
@@ -1460,6 +1485,7 @@ function calcStreak(hid,checks){const hc=checks.filter(c=>c.habitId===hid).map(c
 function addHabit(){const n=document.getElementById('habitName').value;if(!n)return;const h=getData(KEYS.habits);h.push({id:genId(),name:n});setData(KEYS.habits,h);document.getElementById('habitName').value='';renderHabits()}
 function toggleHabit(id){const checks=getData(KEYS.habit_checks),today=todayStr(),idx=checks.findIndex(c=>c.habitId===id&&c.date===today);if(idx>=0)checks.splice(idx,1);else checks.push({id:genId(),habitId:id,date:today});setData(KEYS.habit_checks,checks);renderHabits()}
 function delHabit(id){setData(KEYS.habits,getData(KEYS.habits).filter(x=>x.id!==id));renderHabits()}
+function editHabit(id){const h=getData(KEYS.habits).find(x=>x.id===id);if(!h)return;openEditModal('习惯',[{label:'习惯名称',value:h.name||''}],function(){const data=getData(KEYS.habits);const item=data.find(x=>x.id===id);if(!item)return;item.name=getEditVal(0);setData(KEYS.habits,data);closeModal();renderHabits()})}
 
 // ===== Init =====
 function loadSampleData(){
